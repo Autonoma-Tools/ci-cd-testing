@@ -1,0 +1,59 @@
+stages:
+  - deploy
+  - e2e
+
+# Stage 1: deploy the change to a per-branch Review App.
+# The `environment` block tells GitLab this job produces a deployable
+# environment whose URL can be referenced by downstream jobs via
+# $CI_ENVIRONMENT_URL.
+deploy:
+  stage: deploy
+  image: alpine:3.19
+  script:
+    - echo "Deploying branch '$CI_COMMIT_REF_SLUG' to a Review App..."
+    - echo "Replace this with your real deploy command (kubectl, helm, vercel, etc.)."
+    - echo "The Review App will be reachable at https://review-$CI_COMMIT_REF_SLUG.example.com"
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    url: https://review-$CI_COMMIT_REF_SLUG.example.com
+    on_stop: stop_review
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Companion teardown job so GitLab can destroy the Review App when the MR closes.
+stop_review:
+  stage: deploy
+  image: alpine:3.19
+  script:
+    - echo "Tearing down Review App for '$CI_COMMIT_REF_SLUG'"
+  when: manual
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    action: stop
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+
+# Stage 2: run Playwright against the Review App the `deploy` job created.
+# The Microsoft Playwright image ships with Chromium, Firefox, WebKit and all
+# of their system dependencies pre-installed — no `playwright install` needed.
+e2e:
+  stage: e2e
+  needs: ["deploy"]
+  image: mcr.microsoft.com/playwright:v1.44.0-jammy
+  variables:
+    BASE_URL: $CI_ENVIRONMENT_URL
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    url: https://review-$CI_COMMIT_REF_SLUG.example.com
+    action: verify
+  script:
+    - npm ci
+    - npx playwright test
+  artifacts:
+    when: always
+    paths:
+      - playwright-report/
+    expire_in: 14 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

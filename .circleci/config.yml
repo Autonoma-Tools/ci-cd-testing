@@ -1,0 +1,68 @@
+version: 2.1
+
+# Pipeline parameters let the `deploy` job broadcast the preview URL to the
+# downstream `e2e` job. When `deploy` finishes it runs
+# `circleci step write-output preview_url <value>`, which updates the parameter
+# for the rest of the workflow.
+parameters:
+  preview_url:
+    type: string
+    default: ""
+
+jobs:
+  deploy:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run:
+          name: Deploy to preview environment
+          command: |
+            # Replace this with your real deploy command.
+            # Whatever you use, the final step must compute the preview URL and
+            # emit it as a workflow output so the E2E job can read it.
+            echo "Deploying branch '$CIRCLE_BRANCH' to a preview environment..."
+            PREVIEW_URL="https://preview-${CIRCLE_BRANCH}.example.com"
+            echo "Preview deployed to $PREVIEW_URL"
+
+            # Broadcast the URL to downstream jobs in this workflow.
+            circleci step write-output preview_url "$PREVIEW_URL"
+
+  e2e:
+    # Microsoft Playwright image — Node 18, all browsers, all system deps.
+    docker:
+      - image: mcr.microsoft.com/playwright:v1.44.0-jammy
+    environment:
+      BASE_URL: << pipeline.parameters.preview_url >>
+    steps:
+      - checkout
+      - run:
+          name: Verify preview URL was received
+          command: |
+            if [ -z "$BASE_URL" ]; then
+              echo "BASE_URL is empty — the deploy job did not publish preview_url."
+              exit 1
+            fi
+            echo "Running tests against $BASE_URL"
+      - run:
+          name: Install dependencies
+          command: npm ci
+      - run:
+          name: Run Playwright tests
+          command: npx playwright test
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: test-results
+          destination: test-results
+      - store_artifacts:
+          path: playwright-report
+          destination: playwright-report
+
+workflows:
+  deploy_and_test:
+    jobs:
+      - deploy
+      - e2e:
+          requires:
+            - deploy

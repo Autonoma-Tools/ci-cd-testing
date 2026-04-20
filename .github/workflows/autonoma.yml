@@ -1,0 +1,15 @@
+name: Autonoma E2E
+
+on:
+  deployment_status:
+
+jobs:
+  autonoma:
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Autonoma against preview
+        uses: autonoma-ai/actions/test-runner@v1
+        with:
+          preview-url: ${{ github.event.deployment_status.target_url }}
+          autonoma-token: ${{ secrets.AUTONOMA_TOKEN }}

@@ -1,0 +1,35 @@
+# GitLab CI job for triggering an Autonoma test run against a Review App.
+#
+# Prerequisite: a prior `deploy` job that sets up a Review App and exposes
+# $CI_ENVIRONMENT_URL (see .gitlab-ci.yml for the reference Playwright setup).
+#
+# The same cURL pattern applies verbatim to Bitbucket Pipelines, CircleCI,
+# and Jenkins — only the secret / variable syntax changes:
+#   - GitLab CI:           $AUTONOMA_TOKEN          (Settings > CI/CD > Variables, masked + protected)
+#   - Bitbucket Pipelines: $AUTONOMA_TOKEN          (Repository settings > Pipelines > Repository variables, secured)
+#   - CircleCI:            $AUTONOMA_TOKEN          (Project Settings > Environment Variables)
+#   - Jenkins:             withCredentials(...)     (Credentials plugin, Secret text)
+# The HTTP call itself is identical in every case.
+
+stages:
+  - deploy
+  - e2e
+
+e2e-autonoma:
+  stage: e2e
+  needs: ["deploy"]
+  image: curlimages/curl:latest
+  variables:
+    # $CI_ENVIRONMENT_URL is injected by GitLab from the `deploy` job's
+    # `environment:` block. $AUTONOMA_TOKEN is a protected+masked CI/CD variable.
+    AUTONOMA_API: "https://api.getautonoma.com/v1/run-tests"
+  script:
+    - |
+      echo "Triggering Autonoma test run against $CI_ENVIRONMENT_URL"
+      curl --fail --show-error --silent \
+        -X POST "$AUTONOMA_API" \
+        -H "Authorization: Bearer $AUTONOMA_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"url\": \"$CI_ENVIRONMENT_URL\"}"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

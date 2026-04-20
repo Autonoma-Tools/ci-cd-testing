@@ -1,0 +1,37 @@
+image: atlassian/default-image:4
+
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: Deploy to preview
+          script:
+            # Replace this block with your real deploy command.
+            # The only contract between Deploy and E2E Tests is the file
+            # `preview-url.txt` at the repo root, which must contain the URL
+            # the newly deployed preview is reachable at.
+            - echo "Deploying branch '$BITBUCKET_BRANCH' to a preview environment..."
+            - export PREVIEW_URL="https://preview-${BITBUCKET_BRANCH}.example.com"
+            - echo "$PREVIEW_URL" > preview-url.txt
+            - echo "Preview deployed to $PREVIEW_URL"
+          artifacts:
+            # Pass the URL file to the next step.
+            - preview-url.txt
+
+      - step:
+          name: E2E Tests
+          # Microsoft's official Playwright image — browsers + Node 18 + system deps baked in.
+          image: mcr.microsoft.com/playwright:v1.44.0-jammy
+          caches:
+            - node
+          script:
+            - test -f preview-url.txt || (echo "preview-url.txt not found — did Deploy succeed?" && exit 1)
+            - export BASE_URL="$(cat preview-url.txt)"
+            - echo "Running Playwright against $BASE_URL"
+            - npm ci
+            - npx playwright test
+          after-script:
+            # Always surface the report, even when tests fail, so the PR reviewer can debug.
+            - echo "Test run complete. See the playwright-report/ artifact for the full HTML report."
+          artifacts:
+            - playwright-report/**

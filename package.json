@@ -1,0 +1,16 @@
+{
+  "name": "ci-cd-testing",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Companion code for the Autonoma blog post 'CI/CD Testing: Add E2E Tests to Your Deployment Pipeline'.",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
